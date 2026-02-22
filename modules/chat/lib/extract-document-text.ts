@@ -67,26 +67,19 @@ function readTextFile(file: File): Promise<string> {
 }
 
 async function extractPdfText(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const pdfjs = await import("pdfjs-dist");
-    if (typeof window !== "undefined" && !(pdfjs.GlobalWorkerOptions as { workerSrc?: string })?.workerSrc) {
-      (pdfjs.GlobalWorkerOptions as { workerSrc?: string }).workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
-    }
-    const doc = await pdfjs.getDocument({ url }).promise;
-    const parts: string[] = [];
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ");
-      parts.push(pageText);
-    }
-    return parts.join("\n");
-  } finally {
-    URL.revokeObjectURL(url);
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch("/api/extract-document", {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? "Error al extraer texto del PDF.");
   }
+  const { text } = (await res.json()) as { text: string };
+  if (!text?.trim()) throw new Error("No se pudo extraer texto del documento.");
+  return text.trim();
 }
 
 async function extractWordText(file: File): Promise<string> {

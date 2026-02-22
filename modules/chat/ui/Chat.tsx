@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import { useChatService } from "./ChatServiceContext";
 import { useChat } from "../application/use-chat";
+import { useChatSessionId } from "../application/use-chat-session-id";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ChatLoading } from "./ChatLoading";
@@ -14,6 +15,10 @@ type ChatProps = {
   /** When set, show "Crear proyecto". Pass execution data when available so the project is created with roadmap. */
   onCreateProject?: (executionData?: ExecutionData) => void | Promise<void>;
   showCreateProjectAfterUserMessages?: number;
+  /** If false and user tries to select a proposal, onRequireAuth is called instead. */
+  isAuthenticated?: boolean;
+  /** Called when user tries to select a proposal but is not authenticated. */
+  onRequireAuth?: () => void;
 };
 
 /**
@@ -23,9 +28,26 @@ type ChatProps = {
 export function Chat({
   onCreateProject,
   showCreateProjectAfterUserMessages = 1,
+  isAuthenticated = true,
+  onRequireAuth,
 }: ChatProps = {}) {
   const port = useChatService();
-  const { messages, sendMessage, isLoading, lastHasProjectIdea, lastPayload } = useChat(port);
+  const { sessionId, resetSession } = useChatSessionId();
+  const { messages, sendMessage, isLoading, lastHasProjectIdea, lastPayload, resetConversation } =
+    useChat(port, { getSessionId: () => sessionId });
+
+  const handleNuevaConversacion = () => {
+    resetSession();
+    resetConversation();
+  };
+
+  const handleSelectProposal = (proposal: { title?: string; pitch?: string; whyItWins?: string }) => {
+    if (!isAuthenticated && onRequireAuth) {
+      onRequireAuth();
+      return;
+    }
+    sendMessage("Esta", { selectedProposal: proposal });
+  };
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,9 +106,7 @@ export function Chat({
                   key={msg.id}
                   message={msg}
                   payload={payload}
-                  onSelectProposal={(proposal) =>
-                sendMessage("Esta", { selectedProposal: proposal })
-              }
+                  onSelectProposal={handleSelectProposal}
                   onCreateProject={onCreateProject}
                 />
               );
@@ -101,6 +121,15 @@ export function Chat({
       {!isStartView && (
         <div className="shrink-0 border-t border-border bg-background p-4">
           <div className={`mx-auto ${MAX_WIDTH}`}>
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={handleNuevaConversacion}
+                className="text-xs text-text-secondary hover:text-text-primary transition"
+              >
+                Nueva conversación
+              </button>
+            </div>
             <ChatInput onSend={sendMessage} disabled={isLoading} />
             {showCreateProjectInFooter && (
               <div className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-4">

@@ -171,11 +171,13 @@ export class ChatApiAdapter implements ChatServicePort {
     const baseUrl = getBaseUrl();
     const url = `${baseUrl}/ai/chat`;
     const body: {
+      sessionId?: string;
       message?: string;
       selectedProposal?: { title?: string; pitch?: string; whyItWins?: string };
       history?: Array<{ role: "user" | "assistant"; content: string }>;
       attachedContent?: string;
     } = {};
+    if (options?.sessionId) body.sessionId = options.sessionId;
     if (selectedProposal && !hasAttachment) body.selectedProposal = selectedProposal;
     if (trimmed) body.message = trimmed;
     if (hasAttachment) body.attachedContent = attachedContent;

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/modules/auth";
 import { useActiveProject } from "../context/ActiveProjectContext";
 import { useProjectsCatalog } from "../hooks/useProjectsCatalog";
 import {
   DashboardLayout,
-  MomentumCard,
+  DashboardLeftSidebar,
   FeedColumn,
   ReputationColumn,
   type FeedPost,
@@ -81,10 +81,19 @@ const MOCK_IDEA_OF_THE_DAY =
   "Un marketplace que conecte artesanos locales con tiendas de barrio, con pedidos mínimos y reparto semanal.";
 
 export function DashboardScene() {
+  const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuthSession();
   const { activeProjectId } = useActiveProject();
   const catalog = useProjectsCatalog();
   const [activeProjectsCount, setActiveProjectsCount] = useState(0);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.replace("/crear");
+      return;
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -105,6 +114,14 @@ export function DashboardScene() {
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <span className="text-text-secondary">Redirigiendo…</span>
+      </div>
+    );
+  }
+
   const continueProjectHref =
     activeProjectId && isAuthenticated
       ? `/proyectos/${activeProjectId}`
@@ -114,7 +131,7 @@ export function DashboardScene() {
     <>
       <DashboardLayout
         left={
-          <MomentumCard
+          <DashboardLeftSidebar
             streakDays={MOCK_STREAK_DAYS}
             activeProjectsCount={activeProjectsCount}
             monthlyGoal={MOCK_MONTHLY_GOAL}
@@ -138,27 +155,6 @@ export function DashboardScene() {
           />
         }
       />
-
-      {!isAuthenticated && (
-        <div className="dashboard-in mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8 [animation-delay:150ms]">
-          <div className="rounded-2xl border border-border bg-surface/80 px-4 py-4 text-center text-sm text-text-secondary">
-            <Link
-              href="/login?returnTo=/dashboard"
-              className="font-medium text-accent hover:underline"
-            >
-              Inicia sesión
-            </Link>
-            {" o "}
-            <Link
-              href="/signup?returnTo=/dashboard"
-              className="font-medium text-accent hover:underline"
-            >
-              regístrate
-            </Link>
-            {" para crear tu proyecto y acumular reputación verificable."}
-          </div>
-        </div>
-      )}
     </>
   );
 }

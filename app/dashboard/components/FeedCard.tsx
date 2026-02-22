@@ -66,9 +66,18 @@ export function FeedCard({ post }: FeedCardProps) {
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="font-medium text-text-primary">
-              {post.authorName}
-            </span>
+            {post.authorUsername ? (
+              <Link
+                href={`/profile/${post.authorUsername}`}
+                className="font-medium text-text-primary transition hover:text-accent hover:underline"
+              >
+                {post.authorName}
+              </Link>
+            ) : (
+              <span className="font-medium text-text-primary">
+                {post.authorName}
+              </span>
+            )}
             <span className="text-xs text-text-secondary">{post.time}</span>
           </div>
           <span className="mt-0.5 inline-block rounded bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">

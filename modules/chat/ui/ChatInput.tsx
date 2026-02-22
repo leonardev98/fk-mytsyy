@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, FormEvent } from "react";
+import { useState, useRef, useEffect, FormEvent } from "react";
 import type { SendMessageOptions } from "../application/ports";
 import {
   extractDocumentText,
@@ -24,6 +24,16 @@ export function ChatInput({
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const prevDisabledRef = useRef(disabled);
+
+  // Auto-focus when loading ends (like ChatGPT) so you can type again without clicking
+  useEffect(() => {
+    if (prevDisabledRef.current === true && disabled === false) {
+      textInputRef.current?.focus();
+    }
+    prevDisabledRef.current = disabled;
+  }, [disabled]);
 
   const hasAttachment = Boolean(attachedText?.trim());
 
@@ -131,6 +141,7 @@ export function ChatInput({
           </svg>
         </button>
         <input
+          ref={textInputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}

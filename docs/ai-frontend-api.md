@@ -6,6 +6,7 @@ Referencia alineada con el backend. Endpoint: `POST /ai/chat`.
 
 ```json
 {
+  "sessionId": "uuid-de-sesion",
   "message": "Tengo una idea de app para pequeños comercios",
   "history": [
     { "role": "user", "content": "Hola" },
@@ -18,6 +19,7 @@ Referencia alineada con el backend. Endpoint: `POST /ai/chat`.
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
+| `sessionId` | string | no | Identificador de sesión. Se genera una vez con `crypto.randomUUID()`, se persiste en `localStorage` y se incluye en cada request. Para "Nueva conversación" se borra, se genera uno nuevo y se vacía el historial. |
 | `message` | string | sí* | Mensaje actual del usuario (máx 4000 caracteres). *Obligatorio si no se envía `attachedContent`. |
 | `history` | `{ role: "user" \| "assistant", content: string }[]` | no | Últimos mensajes para que la IA detecte el modo y la siguiente pregunta. |
 | `selectedProposal` | `{ title, pitch?, whyItWins? } \| null` | no | Cuando el usuario eligió una propuesta (modo EXECUTION), enviar la seleccionada. No enviar si se envía `attachedContent`. |

@@ -1,4 +1,5 @@
 export { DashboardLayout } from "./DashboardLayout";
+export { DashboardLeftSidebar } from "./DashboardLeftSidebar";
 export { MomentumCard } from "./MomentumCard";
 export type { MomentumCardProps } from "./MomentumCard";
 export { FeedCard, type FeedPost } from "./FeedCard";

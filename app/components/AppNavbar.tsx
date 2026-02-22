@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthSession } from "@/modules/auth";
 import { useActiveProject } from "../context/ActiveProjectContext";
 import { useTheme } from "../context/ThemeContext";
@@ -15,8 +15,25 @@ function slugifyProfile(user: User): string {
 }
 
 export function AppNavbar() {
+  const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated, logout, isLoading } = useAuthSession();
+
+  const navLink = (href: string, label: string, matchFn?: (path: string) => boolean) => {
+    const isActive = matchFn ? matchFn(pathname) : pathname === href || (href !== "/" && pathname.startsWith(href));
+    const base = "rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200";
+    const active = "bg-primary/10 text-primary shadow-sm";
+    const inactive = "text-text-secondary hover:bg-surface hover:text-text-primary";
+    return (
+      <Link
+        href={href}
+        className={`${base} ${isActive ? active : inactive}`}
+        aria-current={isActive ? "page" : undefined}
+      >
+        {label}
+      </Link>
+    );
+  };
   const { hasActiveProject, clearActiveProject } = useActiveProject();
   const { theme, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
@@ -45,48 +62,25 @@ export function AppNavbar() {
           <span className="text-lg">Mytsyy</span>
         </Link>
 
-        <nav className="hidden items-center gap-1 sm:flex">
-          <Link
-            href="/dashboard"
-            className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:bg-surface hover:text-text-primary"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/explore"
-            className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:bg-surface hover:text-text-primary"
-          >
-            Explorar
-          </Link>
-          <Link
-            href="/crear"
-            className="rounded-lg px-3 py-2 text-sm font-medium text-accent transition hover:bg-accent/10 hover:text-accent"
-          >
-            Crear con IA
-          </Link>
-          {isAuthenticated && (
-            <Link
-              href="/proyectos"
-              className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:bg-surface hover:text-text-primary"
-            >
-              Mis proyectos
-            </Link>
-          )}
+        <nav className="hidden items-center gap-0.5 sm:flex">
+          {isAuthenticated && navLink("/dashboard", "Dashboard", (p) => p === "/dashboard")}
+          {navLink("/explore", "Explorar", (p) => p === "/explore")}
+          {navLink("/crear", "Crear con IA", (p) => p.startsWith("/crear"))}
+          {isAuthenticated && navLink("/proyectos", "Mis proyectos", (p) => p === "/proyectos" || p.startsWith("/projects"))}
           {hasActiveProject && (
             <button
               type="button"
               onClick={handleNuevoProyecto}
-              className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:bg-surface hover:text-text-primary"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition hover:bg-surface hover:text-text-primary"
             >
               Nuevo proyecto
             </button>
           )}
-          <Link
-            href={isAuthenticated && user ? `/profile/${slugifyProfile(user)}` : "/perfil"}
-            className="rounded-lg px-3 py-2 text-sm text-text-secondary transition hover:bg-surface hover:text-text-primary"
-          >
-            Perfil
-          </Link>
+          {isAuthenticated && navLink(
+            user ? `/profile/${slugifyProfile(user)}` : "/perfil",
+            "Perfil",
+            (p) => p === "/perfil" || p.startsWith("/profile/")
+          )}
         </nav>
 
         <div className="flex items-center gap-2">

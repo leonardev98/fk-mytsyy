@@ -1,16 +1,24 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { Message } from "../domain";
 import type { AssistantPayload } from "../domain/assistant-payload";
 import type { ChatServicePort, SendMessageOptions } from "./ports";
+
+type UseChatOptions = {
+  /** Función que devuelve el sessionId actual (para incluir en cada request). */
+  getSessionId?: () => string | undefined;
+};
 
 /**
  * Use case: orchestrate chat flow.
  * Depends only on ChatServicePort (abstraction). No adapter imports.
  * Tracks last assistant payload (mode + data) for dynamic UI rendering.
+ * Uses mounted ref to avoid setState after unmount (no memory leaks).
  */
-export function useChat(chatService: ChatServicePort) {
+export function useChat(chatService: ChatServicePort, options?: UseChatOptions) {
+  const getSessionId = options?.getSessionId;
+  const mountedRef = useRef(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingInit, setIsLoadingInit] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,11 +26,20 @@ export function useChat(chatService: ChatServicePort) {
   const [lastHasProjectIdea, setLastHasProjectIdea] = useState(false);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const init = chatService.getInitialMessages();
     if (init instanceof Promise) {
       init.then((msgs) => {
-        setMessages(msgs);
-        setIsLoadingInit(false);
+        if (mountedRef.current) {
+          setMessages(msgs);
+          setIsLoadingInit(false);
+        }
       });
     } else {
       setMessages(init);
@@ -45,7 +62,6 @@ export function useChat(chatService: ChatServicePort) {
         createdAt: new Date(),
       };
 
-      // Historial: mensajes actuales + mensaje nuevo (para no depender del setState y evitar doble POST)
       const history: Array<{ role: "user" | "assistant"; content: string }> = [
         ...messages.map((m) => ({ role: m.role, content: m.content })),
         { role: "user" as const, content: effectiveContent },
@@ -54,17 +70,38 @@ export function useChat(chatService: ChatServicePort) {
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
 
+      const sessionId = getSessionId?.();
       chatService
-        .sendMessage(effectiveContent, { ...options, history })
+        .sendMessage(effectiveContent, { ...options, history, sessionId })
         .then((result) => {
-          setMessages((prev) => [...prev, result.message]);
-          setLastHasProjectIdea(result.hasProjectIdea === true);
-          setLastPayload(result.payload);
+          if (mountedRef.current) {
+            setMessages((prev) => [...prev, result.message]);
+            setLastHasProjectIdea(result.hasProjectIdea === true);
+            setLastPayload(result.payload);
+          }
         })
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          if (mountedRef.current) setIsLoading(false);
+        });
     },
-    [chatService, isLoading, messages]
+    [chatService, isLoading, messages, getSessionId]
   );
 
-  return { messages, sendMessage, isLoading, isLoadingInit, lastHasProjectIdea, lastPayload };
+  const resetConversation = useCallback(() => {
+    const init = chatService.getInitialMessages();
+    const setInit = (msgs: Message[]) => {
+      if (mountedRef.current) {
+        setMessages(msgs);
+        setLastPayload(undefined);
+        setLastHasProjectIdea(false);
+      }
+    };
+    if (init instanceof Promise) {
+      init.then(setInit);
+    } else {
+      setInit(init);
+    }
+  }, [chatService]);
+
+  return { messages, sendMessage, isLoading, isLoadingInit, lastHasProjectIdea, lastPayload, resetConversation };
 }

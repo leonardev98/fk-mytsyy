@@ -1,16 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthSession } from "@/modules/auth";
 import { useActiveProject } from "../context/ActiveProjectContext";
 import { useProjectsCatalog } from "../hooks/useProjectsCatalog";
 import { DashboardChatScene } from "./DashboardChatScene";
+import { AuthRequiredModal } from "./AuthRequiredModal";
 import type { ExecutionData } from "@/modules/chat/domain/assistant-payload";
 
 export function CrearProyectoScene() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthSession();
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const { setActiveProject } = useActiveProject();
   const catalog = useProjectsCatalog();
 
@@ -48,7 +51,12 @@ export function CrearProyectoScene() {
 
   return (
     <div className="flex flex-col">
-      <DashboardChatScene onCreateProject={handleCreateProject} />
+      <DashboardChatScene
+        onCreateProject={handleCreateProject}
+        isAuthenticated={!!isAuthenticated}
+        onRequireAuth={() => setShowAuthModal(true)}
+      />
+      <AuthRequiredModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} returnTo="/crear" />
       {!isAuthenticated && (
         <div className="border-t border-border bg-background/80 px-4 py-3 text-center text-sm text-text-secondary">
           Inicia sesión o{" "}

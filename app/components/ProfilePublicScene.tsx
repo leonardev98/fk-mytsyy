@@ -1,185 +1,161 @@
 "use client";
 
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useAuthSession } from "@/modules/auth";
-import { StreakIndicator } from "./StreakIndicator";
-import { ReputationBadge } from "./ReputationBadge";
-import { ProjectCardPublic } from "./ProjectCardPublic";
+import { useProjectsCatalog } from "@/app/hooks/useProjectsCatalog";
+import { getMockUser } from "@/lib/mock-users";
+import type { ProfileProjectItem } from "./profile/ProfileProjects";
+import { ProfileHeader } from "./profile/ProfileHeader";
+import { ProfileStats } from "./profile/ProfileStats";
+import { ProfileProjects } from "./profile/ProfileProjects";
+import { ProfileIdeas } from "./profile/ProfileIdeas";
+import { ProfileActivity } from "./profile/ProfileActivity";
+import { ProfileAchievements } from "./profile/ProfileAchievements";
 
 type ProfilePublicSceneProps = {
   username: string;
 };
 
-// Mock: backend will provide builder by username
-const MOCK_BUILDERS: Record<
-  string,
-  {
-    displayName: string;
-    bio: string;
-    avatarUrl?: string | null;
-    streakDays: number;
-    completedProjects: number;
-    projectsStarted: number;
-    projectsFinished: number;
-    completionRatePercent: number;
-    level: number;
-    consistencyActiveDaysLast7: number;
-    timeline: { id: string; title: string; currentDay: number; totalDays: number; progressPercent: number }[];
-    badges: { kind: "projects_completed" | "streak" | "first_client"; value: string }[];
-  }
-> = {
-  mariag: {
-    displayName: "María García",
-    bio: "Builder enfocada en SaaS B2B. 30 días para validar.",
-    streakDays: 12,
-    completedProjects: 2,
-    projectsStarted: 4,
-    projectsFinished: 2,
-    completionRatePercent: 50,
-    level: 3,
-    consistencyActiveDaysLast7: 5,
-    timeline: [
-      { id: "1", title: "App de reservas", currentDay: 30, totalDays: 30, progressPercent: 100 },
-      { id: "2", title: "CRM pymes", currentDay: 12, totalDays: 30, progressPercent: 40 },
-    ],
-    badges: [
-      { kind: "projects_completed", value: "2 proyectos" },
-      { kind: "streak", value: "12 días" },
-    ],
-  },
-  default: {
-    displayName: "Builder",
-    bio: "Construyendo en público.",
-    streakDays: 0,
-    completedProjects: 0,
-    projectsStarted: 0,
-    projectsFinished: 0,
-    completionRatePercent: 0,
-    level: 1,
-    consistencyActiveDaysLast7: 0,
-    timeline: [],
-    badges: [],
-  },
-};
+type TabId = "projects" | "ideas" | "activity" | "achievements";
+
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: "projects", label: "Proyectos", icon: "🧠" },
+  { id: "ideas", label: "Ideas", icon: "💡" },
+  { id: "activity", label: "Actividad", icon: "📊" },
+  { id: "achievements", label: "Logros", icon: "🏆" },
+];
+
+function mapApiProjectToProfileItem(
+  p: { id: string; title: string; description?: string; createdAt: string; lastProgress?: { progressPercent?: number } }
+): ProfileProjectItem {
+  return {
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    tags: [],
+    date: p.createdAt.slice(0, 10),
+    progressPercent: p.lastProgress?.progressPercent ?? 0,
+  };
+}
 
 export function ProfilePublicScene({ username }: ProfilePublicSceneProps) {
   const { user, isAuthenticated } = useAuthSession();
-  const builder = MOCK_BUILDERS[username] ?? MOCK_BUILDERS.default;
+  const catalog = useProjectsCatalog();
+  const [activeTab, setActiveTab] = useState<TabId>("projects");
+  const [ownProjects, setOwnProjects] = useState<ProfileProjectItem[] | null>(null);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+
+  const mockUser = getMockUser(username);
   const isOwnProfile =
     isAuthenticated &&
     user &&
-    (user.name?.toLowerCase().replace(/\s+/g, "") === username ||
+    (user.name?.toLowerCase().replace(/\s+/g, "-") === username ||
      (user as { username?: string }).username === username);
 
-  const initials = builder.displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  useEffect(() => {
+    if (!isOwnProfile || !isAuthenticated) {
+      setOwnProjects(null);
+      setProjectsLoading(false);
+      return;
+    }
+    setProjectsLoading(true);
+    catalog
+      .listProjects()
+      .then((list) => setOwnProjects(list.map(mapApiProjectToProfileItem)))
+      .catch(() => setOwnProjects([]))
+      .finally(() => setProjectsLoading(false));
+  }, [isOwnProfile, isAuthenticated, catalog]);
+
+  const displayProjects: ProfileProjectItem[] = isOwnProfile && ownProjects !== null
+    ? ownProjects
+    : mockUser.projects;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="dashboard-in">
-        <header className="rounded-2xl border border-border bg-surface p-6 transition-colors duration-[250ms]">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
-            <div
-              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-2xl font-semibold text-primary"
-              aria-hidden
+    <div className="dashboard-in mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <ProfileHeader user={mockUser} isOwnProfile={!!isOwnProfile} />
+
+      <section className="mt-6">
+        <ProfileStats stats={mockUser.stats} />
+      </section>
+
+      <section className="mt-8">
+        <div
+          className="flex gap-1 overflow-x-auto border-b border-border pb-px"
+          role="tablist"
+          aria-label="Secciones del perfil"
+        >
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              id={`tab-${tab.id}`}
+              onClick={() => setActiveTab(tab.id)}
+              className={`shrink-0 rounded-t-xl px-4 py-3 text-sm font-medium transition ${
+                activeTab === tab.id
+                  ? "border-b-2 border-primary bg-surface text-primary"
+                  : "text-text-secondary hover:bg-surface/50 hover:text-text-primary"
+              }`}
             >
-              {builder.avatarUrl ? (
-                <img
-                  src={builder.avatarUrl}
-                  alt=""
-                  className="h-24 w-24 rounded-full object-cover"
-                />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold tracking-tight text-text-primary sm:text-2xl">
-                {builder.displayName}
-              </h1>
-              <p className="text-sm text-text-secondary">@{username}</p>
-              {builder.bio != null && builder.bio !== "" && (
-                <p className="mt-2 text-sm text-text-secondary">{builder.bio}</p>
-              )}
-              {isOwnProfile && (
-                <Link
-                  href="/perfil"
-                  className="mt-3 inline-block rounded-xl border border-border px-4 py-2 text-sm font-medium text-text-primary transition hover:bg-background"
-                >
-                  Editar perfil
-                </Link>
-              )}
-            </div>
-          </div>
+              <span className="mr-1.5" aria-hidden>
+                {tab.icon}
+              </span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-6 sm:grid-cols-4">
-            <div>
-              <StreakIndicator days={builder.streakDays} label="Racha actual" size="sm" />
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-text-primary">
-                {builder.completedProjects}
-              </p>
-              <p className="text-xs text-text-secondary">🏆 Proyectos completados</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-text-primary">
-                {builder.projectsStarted}
-              </p>
-              <p className="text-xs text-text-secondary">Proyectos iniciados</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-text-primary">
-                {builder.completionRatePercent}%
-              </p>
-              <p className="text-xs text-text-secondary">Tasa de finalización</p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <ReputationBadge kind="level" value={`Nivel ${builder.level}`} />
-            <ReputationBadge
-              kind="consistency"
-              value={`${builder.consistencyActiveDaysLast7}/7 días`}
-              label="esta semana"
-            />
-            {builder.badges.map((b) => (
-              <ReputationBadge key={b.kind} kind={b.kind} value={b.value} />
-            ))}
-          </div>
-        </header>
-
-        <section className="mt-8">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-text-secondary">
-            Timeline de proyectos
-          </h2>
-          {builder.timeline.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-text-secondary">
-              Aún no hay proyectos públicos.
-            </div>
-          ) : (
-            <ul className="space-y-3">
-              {builder.timeline.map((p) => (
-                <li key={p.id}>
-                  <ProjectCardPublic
-                    id={p.id}
-                    title={p.title}
-                    currentDay={p.currentDay}
-                    totalDays={p.totalDays}
-                    progressPercent={p.progressPercent}
-                    authorUsername={username}
-                    authorName={builder.displayName}
-                  />
-                </li>
-              ))}
-            </ul>
+        <div
+          id="panel-projects"
+          role="tabpanel"
+          aria-labelledby="tab-projects"
+          hidden={activeTab !== "projects"}
+          className="mt-6"
+        >
+          {activeTab === "projects" && (
+            projectsLoading ? (
+              <div className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-text-secondary">
+                Cargando proyectos…
+              </div>
+            ) : (
+              <ProfileProjects projects={displayProjects} />
+            )
           )}
-        </section>
-      </div>
+        </div>
+        <div
+          id="panel-ideas"
+          role="tabpanel"
+          aria-labelledby="tab-ideas"
+          hidden={activeTab !== "ideas"}
+          className="mt-6"
+        >
+          {activeTab === "ideas" && <ProfileIdeas ideas={mockUser.ideas} />}
+        </div>
+        <div
+          id="panel-activity"
+          role="tabpanel"
+          aria-labelledby="tab-activity"
+          hidden={activeTab !== "activity"}
+          className="mt-6"
+        >
+          {activeTab === "activity" && (
+            <ProfileActivity activity={mockUser.activity} />
+          )}
+        </div>
+        <div
+          id="panel-achievements"
+          role="tabpanel"
+          aria-labelledby="tab-achievements"
+          hidden={activeTab !== "achievements"}
+          className="mt-6"
+        >
+          {activeTab === "achievements" && (
+            <ProfileAchievements achievements={mockUser.achievements} />
+          )}
+        </div>
+      </section>
     </div>
   );
 }

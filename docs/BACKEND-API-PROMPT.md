@@ -112,6 +112,7 @@ Content-Type: application/json
 }
 ```
 
+
 | Campo            | Tipo   | Requerido | Descripción |
 |------------------|--------|-----------|-------------|
 | `entryDate`      | string | sí        | YYYY-MM-DD. |

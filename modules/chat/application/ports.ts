@@ -19,6 +19,8 @@ export interface SelectedProposal {
 }
 
 export interface SendMessageOptions {
+  /** Identificador de sesión para contexto de conversación en el backend. */
+  sessionId?: string;
   /** Cuando el usuario elige una card en proposal: objeto completo de la propuesta elegida. */
   selectedProposal?: SelectedProposal;
   /** Historial de la conversación para que la IA sepa qué se preguntó ya (exploration: siguiente pregunta correcta). */
