@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthSession } from "@/modules/auth";
 import { useActiveProject } from "../context/ActiveProjectContext";
 import { useProjectsCatalog } from "../hooks/useProjectsCatalog";
+import { useFeedApi } from "../hooks/useFeedApi";
 import {
   DashboardLayout,
   DashboardLeftSidebar,
@@ -15,47 +16,13 @@ import {
   type TopStreak,
   type TrendingProject,
 } from "../dashboard/components";
+import type { CreatePostPayload } from "@/modules/feed-post";
 
 const MOCK_STREAK_DAYS = 5;
 const MOCK_MONTHLY_GOAL = "Validar con 3 clientes potenciales";
 const MOCK_AVERAGE_PROGRESS = 42;
 
-const MOCK_FEED_POSTS: FeedPost[] = [
-  {
-    id: "1",
-    authorName: "María García",
-    authorUsername: "mariag",
-    time: "Hace 2 h",
-    text: "Día 12/30 – Hoy lancé la landing. Primeros visitantes.",
-    currentDay: 12,
-    totalDays: 30,
-    progressPercent: 40,
-    reactionCount: 8,
-  },
-  {
-    id: "2",
-    authorName: "Carlos Ruiz",
-    authorUsername: "carlosr",
-    time: "Hace 5 h",
-    text: "Conseguí mi primer cliente. La validación funciona.",
-    currentDay: 18,
-    totalDays: 30,
-    progressPercent: 60,
-    evidenceLink: "https://example.com/demo",
-    reactionCount: 24,
-  },
-  {
-    id: "3",
-    authorName: "Ana López",
-    authorUsername: "analopez",
-    time: "Ayer",
-    text: "Semana 3 del plan. MVP casi listo para probar.",
-    currentDay: 21,
-    totalDays: 30,
-    progressPercent: 70,
-    reactionCount: 5,
-  },
-];
+const PAGE_SIZE = 20;
 
 const MOCK_WEEKLY_RANKING: RankedBuilder[] = [
   { rank: 1, username: "mariag", displayName: "María García", streakDays: 12, completedProjects: 2 },
@@ -85,7 +52,13 @@ export function DashboardScene() {
   const { isAuthenticated, isLoading: authLoading } = useAuthSession();
   const { activeProjectId } = useActiveProject();
   const catalog = useProjectsCatalog();
+  const feedApi = useFeedApi();
   const [activeProjectsCount, setActiveProjectsCount] = useState(0);
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [feedPage, setFeedPage] = useState(1);
+  const [feedTotal, setFeedTotal] = useState(0);
+  const [postError, setPostError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -105,6 +78,103 @@ export function DashboardScene() {
       .then((list) => setActiveProjectsCount(list.length))
       .catch(() => setActiveProjectsCount(0));
   }, [isAuthenticated, catalog]);
+
+  const loadFeedPage = useCallback(
+    (page: number, append: boolean) => {
+      if (!feedApi) return;
+      setFeedLoading(true);
+      feedApi
+        .listPosts({ page, limit: PAGE_SIZE })
+        .then((res) => {
+          const mapped: FeedPost[] = res.posts.map((p) => ({
+            id: p.id,
+            authorName: p.authorName,
+            authorUsername: p.authorUsername ?? undefined,
+            authorAvatar: p.authorAvatar ?? null,
+            time: p.time,
+            createdAt: p.createdAt,
+            text: p.text,
+            currentDay: p.currentDay,
+            totalDays: p.totalDays,
+            progressPercent: p.progressPercent,
+            evidenceImageUrl: p.evidenceImageUrl ?? null,
+            evidenceLink: p.evidenceLink ?? null,
+            reactionCount: p.reactionCount,
+            hasReacted: p.hasReacted,
+          }));
+          setPosts((prev) => (append ? [...prev, ...mapped] : mapped));
+          setFeedTotal(res.total);
+        })
+        .catch(() => {
+          if (!append) setPosts([]);
+        })
+        .finally(() => setFeedLoading(false));
+    },
+    [feedApi]
+  );
+
+  useEffect(() => {
+    if (!isAuthenticated || !feedApi) {
+      setFeedLoading(false);
+      return;
+    }
+    loadFeedPage(1, false);
+    setFeedPage(1);
+  }, [isAuthenticated, feedApi, loadFeedPage]);
+
+  const handlePostCreated = useCallback(
+    (payload: CreatePostPayload) => {
+      if (!feedApi) return;
+      setPostError(null);
+      feedApi
+        .createPost(payload)
+        .then((p) => {
+          const newPost: FeedPost = {
+            id: p.id,
+            authorName: p.authorName,
+            authorUsername: p.authorUsername ?? undefined,
+            authorAvatar: p.authorAvatar ?? null,
+            time: p.time,
+            createdAt: p.createdAt,
+            text: p.text,
+            currentDay: p.currentDay,
+            totalDays: p.totalDays,
+            progressPercent: p.progressPercent,
+            evidenceImageUrl: p.evidenceImageUrl ?? null,
+            evidenceLink: p.evidenceLink ?? null,
+            reactionCount: p.reactionCount,
+            hasReacted: false,
+          };
+          setPosts((prev) => [newPost, ...prev]);
+          setFeedTotal((t) => t + 1);
+        })
+        .catch((e) => setPostError(e instanceof Error ? e.message : "Error al publicar"));
+    },
+    [feedApi]
+  );
+
+  const handleLoadMore = useCallback(() => {
+    const next = feedPage + 1;
+    setFeedPage(next);
+    loadFeedPage(next, true);
+  }, [feedPage, loadFeedPage]);
+
+  const handleReact = useCallback(
+    (postId: string) => {
+      if (!feedApi) return Promise.reject(new Error("Sin sesión"));
+      return feedApi.toggleReaction(postId).then((res) => {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === postId
+              ? { ...p, reactionCount: res.reactionCount, hasReacted: res.hasReacted }
+              : p
+          )
+        );
+        return res;
+      });
+    },
+    [feedApi]
+  );
 
   if (authLoading) {
     return (
@@ -141,10 +211,22 @@ export function DashboardScene() {
           />
         }
         center={
-          <FeedColumn
-            posts={MOCK_FEED_POSTS}
-            isAuthenticated={!!isAuthenticated}
-          />
+          <>
+            {postError && (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+                {postError}
+              </div>
+            )}
+            <FeedColumn
+              posts={posts}
+              isAuthenticated={!!isAuthenticated}
+              onPostCreated={feedApi ? handlePostCreated : undefined}
+              onReact={feedApi ? handleReact : undefined}
+              isLoading={feedLoading && posts.length === 0}
+              hasMore={posts.length < feedTotal}
+              onLoadMore={posts.length < feedTotal ? handleLoadMore : undefined}
+            />
+          </>
         }
         right={
           <ReputationColumn

@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { formatFeedTime } from "@/modules/feed-post/lib/format-feed-time";
 
 export type FeedPost = {
   id: string;
   authorName: string;
-  authorUsername?: string;
+  authorUsername?: string | null;
   authorAvatar?: string | null;
   time: string;
+  createdAt?: string;
   text: string;
   currentDay: number;
   totalDays?: number;
@@ -16,20 +18,42 @@ export type FeedPost = {
   evidenceImageUrl?: string | null;
   evidenceLink?: string | null;
   reactionCount: number;
+  hasReacted?: boolean;
 };
 
 type FeedCardProps = {
   post: FeedPost;
+  onReact?: (postId: string) => Promise<{ reactionCount: number; hasReacted: boolean }>;
 };
 
-export function FeedCard({ post }: FeedCardProps) {
+export function FeedCard({ post, onReact }: FeedCardProps) {
   const [reactionCount, setReactionCount] = useState(post.reactionCount);
-  const [reacted, setReacted] = useState(false);
+  const [reacted, setReacted] = useState(!!post.hasReacted);
+  const [reacting, setReacting] = useState(false);
 
-  function handleReact() {
-    setReacted((prev) => !prev);
-    setReactionCount((c) => (reacted ? c - 1 : c + 1));
+  async function handleReact() {
+    if (!onReact) {
+      setReacted((prev) => !prev);
+      setReactionCount((c) => (reacted ? c - 1 : c + 1));
+      return;
+    }
+    if (reacting) return;
+    setReacting(true);
+    try {
+      const res = await onReact(post.id);
+      setReactionCount(res.reactionCount);
+      setReacted(res.hasReacted);
+    } catch {
+      // Error ya manejado por el adaptador; no actualizamos estado (se queda como estaba)
+    } finally {
+      setReacting(false);
+    }
   }
+
+  const displayTime =
+    post.time && /^\d{4}-\d{2}-\d{2}/.test(post.time)
+      ? formatFeedTime(post.time)
+      : post.time || (post.createdAt ? formatFeedTime(post.createdAt) : "");
 
   const initials = post.authorName
     .split(" ")
@@ -78,7 +102,7 @@ export function FeedCard({ post }: FeedCardProps) {
                 {post.authorName}
               </span>
             )}
-            <span className="text-xs text-text-secondary">{post.time}</span>
+            <span className="text-xs text-text-secondary">{displayTime}</span>
           </div>
           <span className="mt-0.5 inline-block rounded bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">
             Día {post.currentDay}/{totalDays}
@@ -122,7 +146,8 @@ export function FeedCard({ post }: FeedCardProps) {
             <button
               type="button"
               onClick={handleReact}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-text-secondary transition hover:bg-background hover:text-accent"
+              disabled={reacting}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-text-secondary transition hover:bg-background hover:text-accent disabled:opacity-70"
               aria-pressed={reacted}
             >
               <span aria-hidden>{reacted ? "❤️" : "🤍"}</span>
