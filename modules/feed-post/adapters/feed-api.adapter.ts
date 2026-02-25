@@ -3,7 +3,15 @@
  * Base URL: NEXT_PUBLIC_API_URL (same as projects).
  */
 
-import type { FeedApiPort, CreatePostInput, FeedListResponse, FeedPostFromApi, ReactionResponse } from "../application/ports";
+import type {
+  FeedApiPort,
+  CreatePostInput,
+  FeedListResponse,
+  FeedPostFromApi,
+  ReactionResponse,
+  CommentsListResponse,
+  FeedCommentFromApi,
+} from "../application/ports";
 
 const getBaseUrl = () =>
   typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL
@@ -70,6 +78,31 @@ export class FeedApiAdapter implements FeedApiPort {
   async toggleReaction(postId: string): Promise<ReactionResponse> {
     return this.request<ReactionResponse>(`/feed/posts/${postId}/reactions`, {
       method: "POST",
+    });
+  }
+
+  async listComments(
+    postId: string,
+    params?: { page?: number; limit?: number }
+  ): Promise<CommentsListResponse> {
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 50;
+    const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.request<CommentsListResponse>(
+      `/feed/posts/${postId}/comments?${query}`,
+      { method: "GET" }
+    );
+  }
+
+  async createComment(
+    postId: string,
+    text: string,
+    parentId?: string | null
+  ): Promise<FeedCommentFromApi> {
+    const body = { text: text.slice(0, 2000), parentId: parentId ?? null };
+    return this.request<FeedCommentFromApi>(`/feed/posts/${postId}/comments`, {
+      method: "POST",
+      body: JSON.stringify(body),
     });
   }
 }

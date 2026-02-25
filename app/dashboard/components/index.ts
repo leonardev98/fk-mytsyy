@@ -4,6 +4,7 @@ export { MomentumCard } from "./MomentumCard";
 export type { MomentumCardProps } from "./MomentumCard";
 export { FeedCard, type FeedPost } from "./FeedCard";
 export { FeedColumn } from "./FeedColumn";
+export { FeedComments, type FeedComment } from "./FeedComments";
 export { InspirationCard } from "./InspirationCard";
 export {
   InspirationColumn,

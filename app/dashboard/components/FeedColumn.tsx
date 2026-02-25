@@ -3,6 +3,7 @@
 import { CreatePostButton } from "@/modules/feed-post";
 import type { CreatePostPayload } from "@/modules/feed-post";
 import type { FeedPost } from "./FeedCard";
+import type { FeedComment } from "./FeedComments";
 import { FeedCard } from "./FeedCard";
 
 type FeedColumnProps = {
@@ -10,6 +11,11 @@ type FeedColumnProps = {
   isAuthenticated: boolean;
   onPostCreated?: (payload: CreatePostPayload) => void;
   onReact?: (postId: string) => Promise<{ reactionCount: number; hasReacted: boolean }>;
+  commentsByPostId?: Record<string, FeedComment[]>;
+  onAddComment?: (postId: string, text: string, parentId?: string) => void;
+  onOpenComments?: (postId: string) => void;
+  loadingCommentsForPostId?: string | null;
+  currentUser?: { name?: string; email?: string; id: string } | null;
   isLoading?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => void;
@@ -20,6 +26,11 @@ export function FeedColumn({
   isAuthenticated,
   onPostCreated,
   onReact,
+  commentsByPostId = {},
+  onAddComment,
+  onOpenComments,
+  loadingCommentsForPostId = null,
+  currentUser = null,
   isLoading,
   hasMore,
   onLoadMore,
@@ -47,7 +58,17 @@ export function FeedColumn({
         ) : (
           <>
             {posts.map((post) => (
-              <FeedCard key={post.id} post={post} onReact={onReact} />
+              <FeedCard
+                key={post.id}
+                post={post}
+                onReact={onReact}
+                comments={commentsByPostId[post.id] ?? []}
+                onAddComment={onAddComment}
+                onOpenComments={onOpenComments}
+                loadingComments={loadingCommentsForPostId === post.id}
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+              />
             ))}
             {hasMore && onLoadMore && (
               <div className="flex justify-center py-2">

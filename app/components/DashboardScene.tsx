@@ -16,6 +16,7 @@ import {
   type TopStreak,
   type TrendingProject,
 } from "../dashboard/components";
+import type { FeedComment } from "../dashboard/components";
 import type { CreatePostPayload } from "@/modules/feed-post";
 
 const MOCK_STREAK_DAYS = 5;
@@ -49,7 +50,7 @@ const MOCK_IDEA_OF_THE_DAY =
 
 export function DashboardScene() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuthSession();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuthSession();
   const { activeProjectId } = useActiveProject();
   const catalog = useProjectsCatalog();
   const feedApi = useFeedApi();
@@ -59,6 +60,8 @@ export function DashboardScene() {
   const [feedPage, setFeedPage] = useState(1);
   const [feedTotal, setFeedTotal] = useState(0);
   const [postError, setPostError] = useState<string | null>(null);
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, FeedComment[]>>({});
+  const [loadingCommentsForPostId, setLoadingCommentsForPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -86,10 +89,20 @@ export function DashboardScene() {
       feedApi
         .listPosts({ page, limit: PAGE_SIZE })
         .then((res) => {
-          const mapped: FeedPost[] = res.posts.map((p) => ({
+          const mapped: FeedPost[] = res.posts.map((p) => {
+            const raw = p as {
+              authorId?: string | null;
+              author_id?: string | null;
+              authorUsername?: string | null;
+              author_username?: string | null;
+            };
+            const authorId = raw.authorId ?? raw.author_id ?? undefined;
+            const authorUsername = raw.authorUsername ?? raw.author_username ?? undefined;
+            return {
             id: p.id,
             authorName: p.authorName,
-            authorUsername: p.authorUsername ?? undefined,
+            authorId: authorId ?? undefined,
+            authorUsername: authorUsername ?? undefined,
             authorAvatar: p.authorAvatar ?? null,
             time: p.time,
             createdAt: p.createdAt,
@@ -101,7 +114,8 @@ export function DashboardScene() {
             evidenceLink: p.evidenceLink ?? null,
             reactionCount: p.reactionCount,
             hasReacted: p.hasReacted,
-          }));
+          };
+          });
           setPosts((prev) => (append ? [...prev, ...mapped] : mapped));
           setFeedTotal(res.total);
         })
@@ -132,6 +146,7 @@ export function DashboardScene() {
           const newPost: FeedPost = {
             id: p.id,
             authorName: p.authorName,
+            authorId: (p as { authorId?: string | null }).authorId ?? undefined,
             authorUsername: p.authorUsername ?? undefined,
             authorAvatar: p.authorAvatar ?? null,
             time: p.time,
@@ -174,6 +189,63 @@ export function DashboardScene() {
       });
     },
     [feedApi]
+  );
+
+  const mapApiCommentToComment = useCallback((c: {
+    id: string;
+    postId: string;
+    parentId?: string | null;
+    authorName: string;
+    authorId?: string | null;
+    authorUsername?: string | null;
+    authorAvatar?: string | null;
+    text: string;
+    createdAt: string;
+  }): FeedComment => ({
+    id: c.id,
+    postId: c.postId,
+    parentId: c.parentId ?? null,
+    authorName: c.authorName,
+    authorId: c.authorId ?? null,
+    authorUsername: c.authorUsername ?? null,
+    authorAvatar: c.authorAvatar ?? null,
+    text: c.text,
+    createdAt: c.createdAt,
+  }), []);
+
+  const handleOpenComments = useCallback(
+    (postId: string) => {
+      if (!feedApi) return;
+      setLoadingCommentsForPostId(postId);
+      feedApi
+        .listComments(postId, { page: 1, limit: 50 })
+        .then((res) => {
+          const mapped = res.comments.map(mapApiCommentToComment);
+          setCommentsByPostId((prev) => ({ ...prev, [postId]: mapped }));
+        })
+        .catch(() => {
+          setCommentsByPostId((prev) => ({ ...prev, [postId]: prev[postId] ?? [] }));
+        })
+        .finally(() => setLoadingCommentsForPostId(null));
+    },
+    [feedApi, mapApiCommentToComment]
+  );
+
+  const handleAddComment = useCallback(
+    (postId: string, text: string, parentId?: string) => {
+      if (!feedApi) return;
+      feedApi
+        .createComment(postId, text, parentId ?? null)
+        .then((c) => {
+          const newComment = mapApiCommentToComment(c);
+          setCommentsByPostId((prev) => ({
+            ...prev,
+            [postId]: [...(prev[postId] ?? []), newComment],
+          }));
+        })
+        .catch((e) => setPostError(e instanceof Error ? e.message : "Error al publicar el comentario"));
+    },
+    [feedApi, mapApiCommentToComment]
   );
 
   if (authLoading) {
@@ -222,6 +294,11 @@ export function DashboardScene() {
               isAuthenticated={!!isAuthenticated}
               onPostCreated={feedApi ? handlePostCreated : undefined}
               onReact={feedApi ? handleReact : undefined}
+              commentsByPostId={commentsByPostId}
+              onAddComment={feedApi ? handleAddComment : undefined}
+              onOpenComments={feedApi ? handleOpenComments : undefined}
+              loadingCommentsForPostId={loadingCommentsForPostId}
+              currentUser={user ?? null}
               isLoading={feedLoading && posts.length === 0}
               hasMore={posts.length < feedTotal}
               onLoadMore={posts.length < feedTotal ? handleLoadMore : undefined}

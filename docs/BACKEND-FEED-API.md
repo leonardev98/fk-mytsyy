@@ -130,7 +130,8 @@ El frontend espera cada ítem del feed con esta forma (TypeScript):
 type FeedPost = {
   id: string;
   authorName: string;
-  authorUsername?: string;
+  authorId?: string | null;      // id del usuario autor; permite enlazar a /profile/id/:id si no hay username
+  authorUsername?: string | null;
   authorAvatar?: string | null;
   time: string;           // ej. "Hace 2 h", "Ayer", "Ahora", o ISO y el frontend formatea
   text: string;
@@ -147,6 +148,7 @@ El backend debe devolver al menos:
 
 - `id`: identificador único de la publicación.
 - `authorName`: nombre para mostrar del autor (desde tabla `users` o equivalente).
+- `authorId`: (recomendado) id del usuario autor; el frontend lo usa para enlazar al perfil (`/profile/id/:id`) cuando no hay `authorUsername`.
 - `authorUsername`: si existe en el modelo de usuario, slug/username para el enlace al perfil (ej. `/profile/:username`).
 - `authorAvatar`: URL de avatar si existe; si no, `null` o omitir.
 - `time`: texto legible ("Hace 2 h", "Ayer", "Ahora") o fecha ISO (ej. `createdAt`) para que el frontend formatee.
@@ -156,6 +158,29 @@ El backend debe devolver al menos:
 - `reactionCount`: número de reacciones (0 si no hay endpoint de reacciones aún).
 
 Si en la base de datos guardas `createdAt`, puedes devolverlo además de (o en lugar de) `time` y que el frontend formatee; en ese caso documentar el campo (ej. `createdAt: "2025-02-22T10:30:00Z"`).
+
+---
+
+## (Opcional) Resolver perfil por id de usuario
+
+Para que los enlaces “por id” (`/profile/id/:id`) redirijan al perfil por username, el backend puede exponer:
+
+```
+GET /users/:id
+Authorization: Bearer <access_token>   (opcional; puede ser público si solo devuelves datos públicos)
+```
+
+**Respuesta 200:** objeto con al menos `username` (string) para que el frontend redirija a `/profile/:username`. Ejemplo:
+
+```json
+{
+  "id": "uuid-del-usuario",
+  "username": "maria-garcia",
+  "name": "María García"
+}
+```
+
+Si este endpoint no existe, el frontend sigue mostrando el enlace a `/profile/id/:id`; la página intentará cargar el perfil y, si el backend no implementa la resolución, se mostrará “No se pudo cargar este perfil”. Los comentarios pueden incluir también `authorId` (y opcionalmente `authorUsername`) en el mismo formato que las publicaciones.
 
 ---
 
@@ -171,9 +196,12 @@ Si en la base de datos guardas `createdAt`, puedes devolverlo además de (o en l
    Toggle de reacción del usuario; respuesta con `reactionCount` (y si el usuario reaccionó).
 
 4. **Formato FeedPost**  
-   Incluir en cada ítem: `id`, `authorName`, `authorUsername` (opcional), `authorAvatar` (opcional), `time` (o `createdAt`), `text`, `currentDay`, `totalDays`, `progressPercent`, `reactionCount`. Opcionales: `evidenceImageUrl`, `evidenceLink`.
+   Incluir en cada ítem: `id`, `authorName`, `authorId` (recomendado), `authorUsername` (opcional), `authorAvatar` (opcional), `time` (o `createdAt`), `text`, `currentDay`, `totalDays`, `progressPercent`, `reactionCount`. Opcionales: `evidenceImageUrl`, `evidenceLink`.
 
-5. **Auth**  
+5. **(Opcional) GET /users/:id**  
+   Devuelve `username` (y datos públicos) para que el frontend redirija `/profile/id/:id` → `/profile/:username`.
+
+6. **Auth**  
    Mismo mecanismo que proyectos: `Authorization: Bearer <access_token>`, validar JWT y asociar publicaciones al `userId`.
 
 Con esto el frontend puede sustituir el estado local del feed por llamadas a esta API (crear al publicar y GET para cargar/recargar el feed).

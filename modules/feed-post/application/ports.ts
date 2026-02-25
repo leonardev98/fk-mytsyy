@@ -14,6 +14,7 @@ export type CreatePostInput = {
 export type FeedPostFromApi = {
   id: string;
   authorName: string;
+  authorId?: string | null;
   authorUsername?: string | null;
   authorAvatar?: string | null;
   time: string;
@@ -40,8 +41,29 @@ export type ReactionResponse = {
   hasReacted: boolean;
 };
 
+export type FeedCommentFromApi = {
+  id: string;
+  postId: string;
+  parentId?: string | null;
+  authorName: string;
+  authorId?: string | null;
+  authorUsername?: string | null;
+  authorAvatar?: string | null;
+  text: string;
+  createdAt: string;
+};
+
+export type CommentsListResponse = {
+  comments: FeedCommentFromApi[];
+  page: number;
+  limit: number;
+  total: number;
+};
+
 export type FeedApiPort = {
   listPosts(params: { page?: number; limit?: number }): Promise<FeedListResponse>;
   createPost(input: CreatePostInput): Promise<FeedPostFromApi>;
   toggleReaction(postId: string): Promise<ReactionResponse>;
+  listComments(postId: string, params?: { page?: number; limit?: number }): Promise<CommentsListResponse>;
+  createComment(postId: string, text: string, parentId?: string | null): Promise<FeedCommentFromApi>;
 };
